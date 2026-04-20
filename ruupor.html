@@ -9,15 +9,9 @@
   body { font-family: -apple-system, sans-serif; background: #f5f5f5; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 2rem 1rem; }
   .card { background: white; border-radius: 20px; padding: 2rem; max-width: 400px; width: 100%; box-shadow: 0 2px 20px rgba(0,0,0,0.08); }
   h1 { font-size: 22px; font-weight: 600; text-align: center; margin-bottom: 0.25rem; }
-  .sub { text-align: center; color: #888; font-size: 14px; margin-bottom: 2rem; }
-  #btn {
-    width: 140px; height: 140px; border-radius: 50%;
-    border: 2px solid #ddd; background: #f0f0f0;
-    cursor: pointer; display: flex; flex-direction: column;
-    align-items: center; justify-content: center; gap: 8px;
-    margin: 0 auto 1.5rem; transition: background 0.15s, border-color 0.15s;
-    -webkit-tap-highlight-color: transparent; user-select: none;
-  }
+  .sub { text-align: center; color: #888; font-size: 14px; margin-bottom: 1.5rem; }
+  .tip { font-size: 13px; color: #555; background: #f0f7ff; border-radius: 10px; padding: 10px 14px; margin-bottom: 1.5rem; line-height: 1.5; }
+  #btn { width: 140px; height: 140px; border-radius: 50%; border: 2px solid #ddd; background: #f0f0f0; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; margin: 0 auto 1.5rem; transition: background 0.15s, border-color 0.15s; -webkit-tap-highlight-color: transparent; user-select: none; }
   #btn.active { background: #fff0f0; border-color: #e24b4a; }
   .icon { font-size: 52px; line-height: 1; }
   #lbl { font-size: 13px; font-weight: 500; color: #666; }
@@ -36,49 +30,40 @@
 <body>
 <div class="card">
   <h1>📢 Ruupor</h1>
-  <p class="sub">Mikrofon → Kõlar võimendusega</p>
-
+  <p class="sub">Kõrvaklapimikrofon → Telefoni kõlar</p>
+  <div class="tip">🎧 Ühenda juhtmega kõrvaklapid → räägi kõrvaklappide mikrofoni → heli tuleb telefoni kõlarist valjult välja.</div>
   <div id="btn" onclick="toggle()">
     <span class="icon">📢</span>
     <span id="lbl">Vajuta</span>
   </div>
-
   <div class="meter-wrap"><div class="meter-bar" id="meter"></div></div>
-
-  <div class="warn" id="warn">Hoia telefoni mõõduka kaugusega kõrvast — kõrge võimendusega võib heli väga vali olla.</div>
-
+  <div class="warn" id="warn">⚠️ Heli tuleb telefoni kõlarist — ära hoia telefoni kõrva juures!</div>
   <div class="sliders">
     <div class="row">
       <label>Võimendus</label>
-      <input type="range" id="gain" min="1" max="20" value="5" step="1" oninput="setGain(this.value)">
-      <span id="gain-val">5×</span>
+      <input type="range" id="gain" min="1" max="20" value="8" step="1" oninput="setGain(this.value)">
+      <span id="gain-val">8×</span>
     </div>
     <div class="row">
       <label>Kõrged toonid</label>
-      <input type="range" id="treble" min="-12" max="12" value="0" step="1" oninput="setTreble(this.value)">
-      <span id="treble-val">0 dB</span>
+      <input type="range" id="treble" min="-12" max="12" value="3" step="1" oninput="setTreble(this.value)">
+      <span id="treble-val">3 dB</span>
     </div>
   </div>
-
   <div class="status" id="status">Vajuta nuppu, et alustada</div>
 </div>
-
 <script>
 let ctx, gainNode, trebleNode, analyser, animId, stream;
 let active = false;
-const btn = document.getElementById('btn');
-const lbl = document.getElementById('lbl');
-const status = document.getElementById('status');
-const meter = document.getElementById('meter');
-const warn = document.getElementById('warn');
-
 async function toggle() {
+  const btn = document.getElementById('btn');
+  const lbl = document.getElementById('lbl');
+  const status = document.getElementById('status');
+  const warn = document.getElementById('warn');
   if (!active) {
     try {
       status.textContent = 'Küsin mikrofoni luba...';
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
-      });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
       ctx = new (window.AudioContext || window.webkitAudioContext)();
       const src = ctx.createMediaStreamSource(stream);
       gainNode = ctx.createGain();
@@ -96,11 +81,11 @@ async function toggle() {
       active = true;
       btn.classList.add('active');
       lbl.textContent = 'Töötab';
-      status.textContent = 'Räägi telefoni — heli võimendatakse';
+      status.textContent = 'Räägi kõrvaklappide mikrofoni!';
       warn.style.display = 'block';
       drawMeter();
     } catch(e) {
-      status.textContent = 'Viga: ' + e.message;
+      document.getElementById('status').textContent = 'Viga: ' + e.message;
     }
   } else {
     if (animId) cancelAnimationFrame(animId);
@@ -109,24 +94,16 @@ async function toggle() {
     active = false;
     btn.classList.remove('active');
     lbl.textContent = 'Vajuta';
-    status.textContent = 'Peatatud';
-    meter.style.width = '0%';
+    document.getElementById('status').textContent = 'Peatatud';
+    document.getElementById('meter').style.width = '0%';
     warn.style.display = 'none';
   }
 }
-
-function setGain(v) {
-  document.getElementById('gain-val').textContent = v + '×';
-  if (gainNode) gainNode.gain.value = parseFloat(v);
-}
-
-function setTreble(v) {
-  document.getElementById('treble-val').textContent = v + ' dB';
-  if (trebleNode) trebleNode.gain.value = parseFloat(v);
-}
-
+function setGain(v) { document.getElementById('gain-val').textContent = v + '×'; if (gainNode) gainNode.gain.value = parseFloat(v); }
+function setTreble(v) { document.getElementById('treble-val').textContent = v + ' dB'; if (trebleNode) trebleNode.gain.value = parseFloat(v); }
 function drawMeter() {
   const buf = new Uint8Array(analyser.frequencyBinCount);
+  const meter = document.getElementById('meter');
   function tick() {
     analyser.getByteFrequencyData(buf);
     const avg = buf.reduce((a, b) => a + b, 0) / buf.length;
