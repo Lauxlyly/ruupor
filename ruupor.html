@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="et">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ruupor</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, sans-serif; background: #f5f5f5; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 2rem 1rem; }
+  .card { background: white; border-radius: 20px; padding: 2rem; max-width: 400px; width: 100%; box-shadow: 0 2px 20px rgba(0,0,0,0.08); }
+  h1 { font-size: 22px; font-weight: 600; text-align: center; margin-bottom: 0.25rem; }
+  .sub { text-align: center; color: #888; font-size: 14px; margin-bottom: 2rem; }
+  #btn {
+    width: 140px; height: 140px; border-radius: 50%;
+    border: 2px solid #ddd; background: #f0f0f0;
+    cursor: pointer; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 8px;
+    margin: 0 auto 1.5rem; transition: background 0.15s, border-color 0.15s;
+    -webkit-tap-highlight-color: transparent; user-select: none;
+  }
+  #btn.active { background: #fff0f0; border-color: #e24b4a; }
+  .icon { font-size: 52px; line-height: 1; }
+  #lbl { font-size: 13px; font-weight: 500; color: #666; }
+  #btn.active #lbl { color: #e24b4a; }
+  .meter-wrap { height: 10px; background: #eee; border-radius: 5px; overflow: hidden; margin-bottom: 1.5rem; }
+  .meter-bar { height: 100%; width: 0%; border-radius: 5px; background: #1D9E75; transition: width 0.05s; }
+  .sliders { display: flex; flex-direction: column; gap: 1.25rem; margin-bottom: 1.5rem; }
+  .row { display: flex; align-items: center; gap: 10px; }
+  .row label { font-size: 13px; color: #666; width: 90px; flex-shrink: 0; }
+  .row input[type=range] { flex: 1; }
+  .row span { font-size: 13px; font-weight: 600; min-width: 40px; text-align: right; }
+  .status { font-size: 12px; color: #999; text-align: center; min-height: 18px; }
+  .warn { font-size: 12px; color: #b45309; background: #fef3c7; border-radius: 10px; padding: 10px 14px; margin-bottom: 1rem; display: none; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>📢 Ruupor</h1>
+  <p class="sub">Mikrofon → Kõlar võimendusega</p>
+
+  <div id="btn" onclick="toggle()">
+    <span class="icon">📢</span>
+    <span id="lbl">Vajuta</span>
+  </div>
+
+  <div class="meter-wrap"><div class="meter-bar" id="meter"></div></div>
+
+  <div class="warn" id="warn">Hoia telefoni mõõduka kaugusega kõrvast — kõrge võimendusega võib heli väga vali olla.</div>
+
+  <div class="sliders">
+    <div class="row">
+      <label>Võimendus</label>
+      <input type="range" id="gain" min="1" max="20" value="5" step="1" oninput="setGain(this.value)">
+      <span id="gain-val">5×</span>
+    </div>
+    <div class="row">
+      <label>Kõrged toonid</label>
+      <input type="range" id="treble" min="-12" max="12" value="0" step="1" oninput="setTreble(this.value)">
+      <span id="treble-val">0 dB</span>
+    </div>
+  </div>
+
+  <div class="status" id="status">Vajuta nuppu, et alustada</div>
+</div>
+
+<script>
+let ctx, gainNode, trebleNode, analyser, animId, stream;
+let active = false;
+const btn = document.getElementById('btn');
+const lbl = document.getElementById('lbl');
+const status = document.getElementById('status');
+const meter = document.getElementById('meter');
+const warn = document.getElementById('warn');
+
+async function toggle() {
+  if (!active) {
+    try {
+      status.textContent = 'Küsin mikrofoni luba...';
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false }
+      });
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const src = ctx.createMediaStreamSource(stream);
+      gainNode = ctx.createGain();
+      gainNode.gain.value = parseFloat(document.getElementById('gain').value);
+      trebleNode = ctx.createBiquadFilter();
+      trebleNode.type = 'highShelf';
+      trebleNode.frequency.value = 4000;
+      trebleNode.gain.value = parseFloat(document.getElementById('treble').value);
+      analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      src.connect(gainNode);
+      gainNode.connect(trebleNode);
+      trebleNode.connect(analyser);
+      trebleNode.connect(ctx.destination);
+      active = true;
+      btn.classList.add('active');
+      lbl.textContent = 'Töötab';
+      status.textContent = 'Räägi telefoni — heli võimendatakse';
+      warn.style.display = 'block';
+      drawMeter();
+    } catch(e) {
+      status.textContent = 'Viga: ' + e.message;
+    }
+  } else {
+    if (animId) cancelAnimationFrame(animId);
+    stream.getTracks().forEach(t => t.stop());
+    ctx.close();
+    active = false;
+    btn.classList.remove('active');
+    lbl.textContent = 'Vajuta';
+    status.textContent = 'Peatatud';
+    meter.style.width = '0%';
+    warn.style.display = 'none';
+  }
+}
+
+function setGain(v) {
+  document.getElementById('gain-val').textContent = v + '×';
+  if (gainNode) gainNode.gain.value = parseFloat(v);
+}
+
+function setTreble(v) {
+  document.getElementById('treble-val').textContent = v + ' dB';
+  if (trebleNode) trebleNode.gain.value = parseFloat(v);
+}
+
+function drawMeter() {
+  const buf = new Uint8Array(analyser.frequencyBinCount);
+  function tick() {
+    analyser.getByteFrequencyData(buf);
+    const avg = buf.reduce((a, b) => a + b, 0) / buf.length;
+    const pct = Math.min(100, avg / 128 * 200);
+    meter.style.width = Math.round(pct) + '%';
+    meter.style.background = pct > 75 ? '#e24b4a' : pct > 50 ? '#EF9F27' : '#1D9E75';
+    animId = requestAnimationFrame(tick);
+  }
+  tick();
+}
+</script>
+</body>
+</html>
